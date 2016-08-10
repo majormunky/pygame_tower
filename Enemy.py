@@ -10,16 +10,29 @@ class Enemy(object):
         self.current_hp = 40
         self.next_waypoint = self.game.get_next_waypoint(waypoint)
         self.image = load_image("enemy.png")
+        self.info_layer = pygame.Surface((self.image.get_rect().width, self.image.get_rect().height), pygame.SRCALPHA)
         self.x = waypoint[0] - (self.image.get_rect().width / 2)
         self.y = waypoint[1] - (self.image.get_rect().height / 2)
         self.active = True
         self.attacked_by = []
 
-    def draw(self, canvas):
+    def take_damage(self, damage, tower):
+        print("I took some damage: {}".format(damage))
+        self.current_hp -= damage
+        self.update_image()
+        if self.current_hp < 0:
+            self.active = False
+            tower.target_died()
+
+    def update_image(self):
+        self.info_layer.fill((0, 0, 0, 1.0))
         hp_text = text_surface(self.current_hp, font_size=18)
-        self.image.blit(hp_text, (0, 0))
+        self.info_layer.blit(hp_text, (0, 0))
+
+    def draw(self, canvas):
         if self.active:
             canvas.blit(self.image, (self.x, self.y))
+            canvas.blit(self.info_layer, (self.x, self.y))
 
     def is_in_range(self, point):
         r = self.get_rect()

@@ -11,6 +11,37 @@ def distance(obj1, obj2):
         #enemy
         return math.hypot(obj2.x - obj1.x, obj2.y - obj1.y)
 
+class Bullet(object):
+    def __init__(self, movement, target, tower):
+        self.target = target
+        self.tower = tower
+        self.image = load_image("bullet.png")
+        self.active = True
+        self.x = tower.get_rect().centerx
+        self.y = tower.get_rect().centery
+        self.damage = 3
+        self.width = self.image.get_rect().width
+        self.height = self.image.get_rect().height
+        self.movement = movement
+
+    def draw(self, canvas):
+        canvas.blit(self.image, (self.x, self.y))
+
+    def update(self, dt):
+        if self.target.get_rect().colliderect(self.get_rect()):
+            #we hit our target
+            self.target.take_damage(self.damage, self.tower)
+            self.active = False
+        else:
+            self.x += self.movement[0] * dt
+            self.y += self.movement[1] * dt
+
+    def handle_event(self, event):
+        pass
+
+    def get_rect(self):
+        return pygame.Rect(self.x, self.y, self.width, self.height)
+
 class BasicTower(object):
     def __init__(self, x, y, slot, game):
         self.game = game
@@ -19,15 +50,18 @@ class BasicTower(object):
         self.y = y
         self.attack_range = 70
         self.damage = 10
-        self.fire_rate = 1.0
+        self.fire_rate = 1000
         self.attacking = False
         self.target = None
         self.angle = 0
         self.image = load_image("tower.png")
         self.rotated_image = self.image
         self.image_rect = self.image.get_rect()
+        self.draw_range_circle = False
         self.last_image_update = 0
         self.last_image_update_max = 10
+        self.attack_timer = 0
+        self.bullets = []
         self.set_default_direction(slot)
 
     def set_default_direction(self, slot):
@@ -42,15 +76,32 @@ class BasicTower(object):
         self.angle = self.default_direction
         self.update_image_rotation()
 
+    def fire_cannon(self):
+        speed = 0.2
+        if self.target:
+            if self.attack_timer > self.fire_rate:
+                self.attack_timer = 0
+                b_angle = self.get_angle(self, self.target)
+                b_rads = math.radians(b_angle)
+                bdx = speed * math.cos(b_rads)
+                bdy = speed * math.sin(b_rads)
+                b = Bullet([bdx, -bdy], self.target, self)
+                self.bullets.append(b)
 
     def draw(self, canvas):
         canvas.blit(self.rotated_image, (self.x, self.y))
-        pygame.draw.circle(canvas, (255, 255, 255), (self.x + int((self.image_rect.width / 2)), self.y + int((self.image_rect.height / 2))), self.attack_range, 1)
+        if self.draw_range_circle:
+            pygame.draw.circle(canvas, (255, 255, 255), (self.x + int((self.image_rect.width / 2)), self.y + int((self.image_rect.height / 2))), self.attack_range, 1)
+        for b in self.bullets:
+            b.draw(canvas)
 
     def get_rect(self):
         return pygame.Rect(self.x, self.y, self.image_rect.width, self.image_rect.height)
 
     def update(self, dt):
+        #update attack timer
+        self.attack_timer += dt
+
         #if we don't have a target, search for one
         if not self.target:
             self.set_target(self.scan_for_enemies())
@@ -61,8 +112,21 @@ class BasicTower(object):
             if not self.in_range(self.target):
                 print("Target out of range, setting to none")
                 self.target = None
+        #update bullets
+        for b in self.bullets:
+            b.update(dt)
+
+        self.fire_cannon()
+        self.clear_dead_bullets()
         self.update_image(dt)
         
+    def clear_dead_bullets(self):
+        old_bullets = []
+        for i, b in enumerate(self.bullets):
+            if not b.active:
+                old_bullets.append(i)
+        for o in reversed(old_bullets):
+            del self.bullets[o]
 
     def in_range(self, obj):
         dist = distance(self, obj)
@@ -128,6 +192,10 @@ class BasicTower(object):
                 closest = e_dist
         print("Found: {}".format(found))
         return found
+
+    def target_died(self):
+        print("Tower got message that target has died")
+        self.target = None
 
 
 class TowerSlot(object):
